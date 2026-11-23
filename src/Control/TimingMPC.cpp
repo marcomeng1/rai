@@ -24,10 +24,7 @@ TimingMPC::TimingMPC(const arr& _waypoints, double _timeCost, double _ctrlCost)
 }
 
 shared_ptr<SolverReturn> TimingMPC::solve(const arr& x0, const arr& v0, int verbose) {
-  if(!vels.N) {
-    vels = zeros(waypoints.d0-1, waypoints.d1);
-    if(tangents.N) vels=zeros(waypoints.d0-1);
-  }
+  if(!vels.N) vels = zeros(waypoints.d0-1, waypoints.d1); //TimingProblem optimizes full velocities (tangents are not used)
 
   TimingProblem nlp(waypoints({phase,0}), tangents({phase,0}),
                     x0, v0, timeCost, ctrlCost,
@@ -63,12 +60,7 @@ shared_ptr<SolverReturn> TimingMPC::solve(const arr& x0, const arr& v0, int verb
 
 arr TimingMPC::getVels() const {
   if(done()) return zeros(1, waypoints.d1);
-  arr _vels;
-  if(!tangents.N) {
-    _vels = vels({phase,0}).copy();
-  } else {
-    _vels = (vels%tangents)({phase,0}).copy();
-  }
+  arr _vels = vels({phase,0}).copy();
   _vels.append(zeros(waypoints.d1));
   _vels.reshape(waypoints.d0 - phase, waypoints.d1);
   return _vels;

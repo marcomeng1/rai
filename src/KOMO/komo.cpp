@@ -1366,16 +1366,14 @@ void KOMO::run_prepare(double addInitializationNoise) {
   x = pathConfig.getJointState();
 
   //add noise
-  if(addInitializationNoise>0.) {
-    rndGauss(x, addInitializationNoise, true);
+  if(addInitializationNoise>0.) rndGauss(x, addInitializationNoise, true);
 
-    {
-      arr bounds = getBounds();
-      boundClip(x, bounds);
-    }
-
-    pathConfig.setJointState(x);
+  //the solver requires the seed within bounds (also without noise, e.g. a copied-in stable dof)
+  {
+    arr bounds = getBounds();
+    boundClip(x, bounds);
   }
+  pathConfig.setJointState(x);
 }
 
 Graph KOMO::report(bool specs, bool listObjectives, bool plotOverTime, bool sortByError) {
@@ -1450,8 +1448,8 @@ Graph KOMO::report(bool specs, bool listObjectives, bool plotOverTime, bool sort
 
   if(featureValues.N && listObjectives && sortByError){
     std::sort(G.p, G.p+G.N, [](Node* a, Node *b){
-      double A = a->as<Graph>().get<double>("err");
-      double B = b->as<Graph>().get<double>("err");
+      double A = a->as<Graph>().get<double>("err", -1.); //'specs' and 'switches' have no err
+      double B = b->as<Graph>().get<double>("err", -1.);
       return A < B;
     });
     G.index();
@@ -2068,7 +2066,7 @@ StringA KOMO::getCollisionPairs(double belowMargin) {
 
   for(const Proxy& p:pathConfig.proxies) {
     //early check: if proxy is way out of collision, don't bother computing it precise
-    if(p.d > pathConfig.frames(p.A)->shape->radius()+pathConfig.frames(p.B)->shape->radius()+.01+belowMargin) continue;
+    if(p.d > pathConfig.frames.elem(p.A)->shape->radius()+pathConfig.frames.elem(p.B)->shape->radius()+.01+belowMargin) continue;
     //exact computation
     if(!p.collision)((Proxy*)&p)->calc_coll(pathConfig.frames);
     double d = p.collision->getDistance();

@@ -59,6 +59,7 @@ TimingProblem::TimingProblem(const arr& _waypoints, const arr& _tangents,
     for(uint k=0; k<tau.N; k++) {
       bounds(0,k) = .01;
       bounds(1,k) = 10.;
+      tau(k) = rai::MAX(bounds(0,k), rai::MIN(tau(k), bounds(1,k))); //the solver requires the seed to be within bounds
     }
   }
 
