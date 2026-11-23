@@ -24,6 +24,7 @@ struct ParticleDofs : Dof, NonCopyable {
   virtual arr calcDofsFromConfig() const;
   virtual String name() const;
 
+  using Dof::write;
   void write(ostream& os) const {
     NIY;
   }

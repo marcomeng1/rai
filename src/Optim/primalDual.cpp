@@ -206,7 +206,7 @@ void PrimalDualProblem::updateMu() {
 //==============================================================================
 
 OptPrimalDual::OptPrimalDual(arr& x, arr& dual, const shared_ptr<NLP>& P, std::shared_ptr<OptOptions> _opt)
-  : x(x), PD(x, P, opt), newton(PD.x_lambda, PD.f_scalar(), opt), opt(_opt) {
+  : x(x), PD(x, P, _opt), newton(PD.x_lambda, PD.f_scalar(), _opt), opt(_opt) {
 
   if(!!dual && dual.N) PD.L.lambda = dual;
 
