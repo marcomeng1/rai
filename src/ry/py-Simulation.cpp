@@ -91,14 +91,9 @@ void init_Simulation(pybind11::module& m) {
                                 Array2numpy<float>(depth));
   })
 
-  .def("addSensor",  &rai::Simulation::addSensor,
+  .def("addSensor", [](std::shared_ptr<rai::Simulation>& self, const char* sensorName) { self->addSensor(sensorName); },
        "",
-       pybind11::arg("sensorName"),
-       pybind11::arg("width") = 640,
-       pybind11::arg("height") = 360,
-       pybind11::arg("focalLength") = -1.,
-       pybind11::arg("orthoAbsHeight") = -1.,
-       pybind11::arg("zRange") = std::vector<double>()
+       pybind11::arg("sensorName")
       )
   .def("setSimulateDepthNoise", &rai::Simulation::setSimulateDepthNoise, "specify (boolean) on whether to simulate noise", pybind11::arg("_setSimulateDepthNoise"))
   .def("selectSensor",  &rai::Simulation::selectSensor,
