@@ -71,24 +71,14 @@ make dependAll
 make -j4
 ```
 
-## local compile
+## local compile (CMake)
 
-      export MAKEFLAGS="-j $(command nproc --ignore 2)"
-      #apt update
-      #apt install wget
+Dependencies are expected in an active pixi/conda environment
+(`$CONDA_PREFIX`), e.g. the one defined by
+[botop's pixi.toml](https://github.com/marcomeng1/botop), which also
+source-builds fcl 0.5, non-reentrant qhull and PhysX
+(`scripts/build_deps.sh`). Nothing is installed into the system or `~/.local`.
 
-      _make/install.sh ubuntu-rai
-      _make/install.sh libccd
-      _make/install.sh fcl
-      _make/install.sh libann
-  
-      #build tests
-      cmake . -B build -DBUILD_TESTS=ON -DUSE_PHYSX=OFF
-      cmake --build build
-
-      #build with physx
-      ./install.sh physx
-      cmake . -B -DUSE_PHYSX=ON
-      cmake --build build 
-
-
+      cd botop && pixi shell         # or: pixi run bash
+      cmake -S rai -B rai/build -G Ninja -DBUILD_TESTS=ON
+      cmake --build rai/build
