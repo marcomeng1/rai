@@ -5,7 +5,13 @@ project(rai_devel)
 ## variable default values
 set(CMAKE_INSTALL_MESSAGE LAZY)
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ version selection")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+## dependencies are expected in an active pixi/conda environment (e.g. botop's pixi.toml)
+if(DEFINED ENV{CONDA_PREFIX})
+  list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+  if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "$ENV{CONDA_PREFIX}" CACHE PATH "..." FORCE)
+  endif()
+elseif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.local" CACHE PATH "..." FORCE)
 endif()
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
@@ -15,6 +21,7 @@ set(CMAKE_INSTALL_RPATH "\$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib")
 option(USE_PHYSX "link to physx" ON)
 option(USE_H5 "link to h5 library" ON)
 option(USE_FREETYPE "link to freetype2 library" ON)
+option(USE_OPENCV "link to opencv" OFF)
 option(BUILD_TESTS "build tests" OFF)
 
 ## compile options
@@ -39,21 +46,7 @@ add_definitions(
 
 include_directories(
   src
-  $ENV{HOME}/.local/include
-  /usr/include/eigen3
   )
-
-link_directories(
-  $ENV{HOME}/.local/lib
-  )
-
-if(USE_H5)
-  link_directories(/usr/lib/x86_64-linux-gnu/hdf5/serial)
-endif()
-
-if(USE_PHYSX)
-  link_directories($ENV{HOME}/.local/lib/PhysX)
-endif()
 
 file(GLOB SRC_Core src/Core/*.cpp)
 file(GLOB SRC_Optim src/Optim/*.cpp)
@@ -108,50 +101,55 @@ add_library(rai_static STATIC $<TARGET_OBJECTS:raiobjs>)
 
 ################################################################################
 
-#find_package (Eigen3 3.3 REQUIRED NO_MODULE)
-#target_link_libraries (rai Eigen3::Eigen)
+## all dependencies are collected in an interface target, so that include paths
+## also reach the object library raiobjs
+add_library(rai_deps INTERFACE)
+target_link_libraries(raiobjs PUBLIC rai_deps)
+target_link_libraries(rai PUBLIC rai_deps)
+target_link_libraries(rai_static PUBLIC rai_deps)
+
 find_package(PkgConfig REQUIRED)
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(GLUT REQUIRED)
+pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET glfw3 glew glu jsoncpp yaml-0.1 libpng assimp ccd)
+find_library(FCL_LIB NAMES fcl REQUIRED)  # not via pkg-config: fcl.pc forces -std=c++11
+find_library(ANN_LIB NAMES ANN ann REQUIRED)
+find_library(QHULL_LIB NAMES qhullstatic qhull REQUIRED)
+find_library(LAPACK_LIB NAMES lapack REQUIRED)
+find_library(BLAS_LIB NAMES blas REQUIRED)
+
+target_link_libraries(rai_deps INTERFACE
+  Eigen3::Eigen PkgConfig::DEPS GLUT::GLUT
+  ${FCL_LIB} ${ANN_LIB} ${QHULL_LIB} ${LAPACK_LIB} ${BLAS_LIB})
 
 if(USE_FREETYPE)
   find_package(Freetype REQUIRED)
   add_definitions(-DRAI_FREETYPE)
-  include_directories(rai ${FREETYPE_INCLUDE_DIRS})
-  target_link_libraries(rai PRIVATE ${FREETYPE_LIBRARIES})
-  message(STATUS "[rai] using freetype2 libs: " ${FREETYPE_LIBRARIES})
+  target_link_libraries(rai_deps INTERFACE Freetype::Freetype)
 endif()
 
 if(USE_H5)
-  find_package(HDF5 REQUIRED)
+  find_package(HDF5 REQUIRED COMPONENTS C CXX)
   add_definitions(-DRAI_H5)
-  include_directories(${HDF5_INCLUDE_DIRS})
-  target_link_libraries(rai PRIVATE hdf5_cpp hdf5 z)
-  message(STATUS "[rai] using H5 libs: hdf5 hdf5_cpp in " ${HDF5_INCLUDE_DIRS})
+  target_include_directories(rai_deps INTERFACE ${HDF5_INCLUDE_DIRS})
+  target_link_libraries(rai_deps INTERFACE ${HDF5_CXX_LIBRARIES} ${HDF5_C_LIBRARIES})
 endif()
 
 if(USE_PHYSX)
+  find_path(PHYSX_INCLUDE_DIR PxPhysicsAPI.h REQUIRED)
+  set(PHYSX_LIB_DIR "${PHYSX_INCLUDE_DIR}/../lib/PhysX")
   add_definitions(-DRAI_PHYSX -DNDEBUG -DPX_DISABLE_FLUIDS -DCORELIB -DPX32 -DLINUX)
-  target_link_libraries(rai PRIVATE PhysXExtensions_static_64 PhysX_static_64 PhysXCooking_static_64 PhysXCommon_static_64 PhysXFoundation_static_64)
-  message(STATUS "[rai] using physx libs from ~/.local")
+  target_include_directories(rai_deps INTERFACE ${PHYSX_INCLUDE_DIR})
+  foreach(px PhysXExtensions PhysX PhysXCooking PhysXCommon PhysXFoundation)
+    target_link_libraries(rai_deps INTERFACE "${PHYSX_LIB_DIR}/lib${px}_static_64.a")
+  endforeach()
 endif()
 
 if(USE_OPENCV)
+  find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc videoio)
   add_definitions(-DRAI_OPENCV)
-  include_directories($ENV{HOME}/.local/include/opencv4)
-  target_link_libraries(rai opencv_core opencv_highgui opencv_imgproc opencv_videoio)
-  message(STATUS "[rai] using OpenCV libs from ~/.local")
+  target_link_libraries(rai_deps INTERFACE ${OpenCV_LIBS})
 endif()
-
-pkg_check_modules(DEPS REQUIRED glfw3 glew blas lapack jsoncpp libpng assimp qhull)
-find_package(GLUT REQUIRED)
-
-message(STATUS "[rai] pkg-config libraries: " "${DEPS_LIBRARIES}" "${GLUT_LIBRARIES}")
-
-# default/required dependencies
-target_link_libraries(rai PRIVATE
-  ${DEPS_LIBRARIES}
-  ${GLUT_LIBRARIES}
-  yaml fcl ccd ANN
-  )
 
 ################################################################################
 
@@ -173,7 +171,7 @@ foreach(file ${tests})
   get_filename_component(path ${file} DIRECTORY)
   get_filename_component(name ${path} NAME)
   add_executable(${name} ${file})
-  target_link_libraries(${name} rai qhull)
+  target_link_libraries(${name} rai)
 endforeach( file ${tests} )
 endif()
 
