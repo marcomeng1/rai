@@ -25,7 +25,7 @@ to explain.
 ## Repos wrapping rai:
 
 * [Robotic Python Lib](https://pypi.org/project/robotic/)
-* [BotOp](https://github.com/MarcToussaint/botop)
+* [BotOp](https://github.com/MarcToussaint/botop) (pixi-based fork: [marcomeng1/botop](https://github.com/marcomeng1/botop))
 
 ## Documentation
 
@@ -35,50 +35,70 @@ The there is no proper documentation of the full rai code. I recommend starting 
 * The [Wiki page](../../wiki) contains an older introduction to KOMO. There is also an older KOMO tech report on arxiv: <https://arxiv.org/abs/1407.0414>
 * Eventually, the [test main.cpp files](test/) help really understanding the use of the C++ code base.
 
-## Quick Start
+## This branch (`pixi-cleanup`)
+
+This fork branch keeps the code of upstream commit `fff7c885` (the
+version BotOp is pinned to) and changes only the build setup and dead
+code:
+
+* dependencies come from a [pixi](https://pixi.sh) / conda-forge
+  environment instead of `apt` + `~/.local` (`_make/install.sh` was removed)
+* `rai/CMakeLists.txt` finds everything via `$CONDA_PREFIX`,
+  `find_package` and `pkg-config` (no hardcoded `~/.local` or `/usr` paths)
+* all `retired/` folders in `src/` and `_make/` were removed (not compiled,
+  not referenced; still in git history)
+* build fixes: `ry` `addSensor` binding, non-OpenCV `OpencvCamera` stub
+
+## Build
+
+rai has no environment of its own; it is built inside the pixi
+environment of a wrapping project, e.g.
+[BotOp](https://github.com/marcomeng1/botop) (`pixi.toml`). That
+environment provides all libraries from conda-forge and source-builds the
+three that conda-forge cannot provide in a usable form
+(`scripts/build_deps.sh`): fcl 0.5 (rai uses the non-templated fcl API),
+non-reentrant qhull, and PhysX 104.1. Nothing is installed into the
+system or `~/.local`.
+
+As part of BotOp (normal use), BotOp's CMake compiles rai directly:
 
 ```
-git clone git@github.com:MarcToussaint/rai.git
-# OR, if you don't have a github account:
-git clone https://github.com/MarcToussaint/rai.git
-cd rai
-
-# The following two commands depend on the config.mk -- see below
-make -j1 printUbuntuAll    # for your information: what the next step will install
-make -j1 installUbuntuAll APTGETYES=--yes # calls sudo apt-get install; remove 'yes' to allow interrupting
-
-make -j4
-make -j4 tests bin
-make runTests      # compile and run the essential tests
+git clone --recurse-submodules git@github.com:marcomeng1/botop.git
+cd botop
+pixi run install
 ```
 
-## Dependencies
+Standalone (library, `kinEdit`, `meshTool`, optionally tests), from the
+BotOp checkout:
 
-To change the dependencies edit the `config.mk` in `_make`:
-When a flag is set =0, this forces that this package is not
-used. Otherwise (when set =0 is commented), a sub-folder Makefile may
-set it equal to 1 and links to this package. After this you definitely
-need to recompile some components. In doubt
 ```
-make cleanAll
-make -j4
+pixi shell
+cmake -S rai -B rai/build -G Ninja -DBUILD_TESTS=ON
+cmake --build rai/build
 ```
 
-If you pull an update, it might help to create Makefile.dep files
-throught the project using
-```
-make dependAll
-make -j4
-```
+CMake options:
 
-## local compile (CMake)
+| option | default | |
+|---|---|---|
+| `USE_PHYSX` | ON | PhysX simulation (needs `pixi run deps` in BotOp) |
+| `USE_H5` | ON | HDF5 I/O |
+| `USE_FREETYPE` | ON | text rendering in the viewer |
+| `USE_OPENCV` | OFF | OpenCV-based perception |
+| `BUILD_TESTS` | OFF | build `test/*/*/main.cpp` |
 
-Dependencies are expected in an active pixi/conda environment
-(`$CONDA_PREFIX`), e.g. the one defined by
-[botop's pixi.toml](https://github.com/marcomeng1/botop), which also
-source-builds fcl 0.5, non-reentrant qhull and PhysX
-(`scripts/build_deps.sh`). Nothing is installed into the system or `~/.local`.
+With `BUILD_TESTS=ON`, `test/Core/thread` and `test/Kin/CameraView` do
+not compile (they predate the `Var` simplification); all other tests do.
 
-      cd botop && pixi shell         # or: pixi run bash
-      cmake -S rai -B rai/build -G Ninja -DBUILD_TESTS=ON
-      cmake --build rai/build
+Optional backends that are present in the code but not enabled by any
+build here (guarded by `RAI_*` flags, compiled to empty stubs): Bullet,
+ODE, Featherstone, PCL, Ceres, Ipopt, NLopt, Coal, CUDA, Qt, JSON.
+
+## Legacy Makefile system
+
+`_make/` contains the older Makefile-based build (`generic.mk`,
+`defines.mk`, `config.mk`). It is still used to generate the per-module
+`unity.cxx` files (`make unityAll`, called automatically by BotOp's CMake
+on first configure) and by the per-test `Makefile`s. Its
+`installUbuntu`/`printUbuntu` targets install system packages with
+`sudo apt-get` and are not needed with pixi.
