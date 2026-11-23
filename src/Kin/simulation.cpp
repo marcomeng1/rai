@@ -460,6 +460,7 @@ void Simulation::closeGripper(const char* gripperFrameName, double width, double
     }
   }
 
+  for(uint i=self->positionRefs.N; i--;) if(self->positionRefs(i).dof==joint) self->positionRefs.remove(i);
   imps.append(make_shared<Imp_CloseGripper>(gripper, joint, fing1, fing2, obj, speed));
 }
 
@@ -477,6 +478,7 @@ void Simulation::closeGripperGrasp(const char* gripperFrameName, const char* obj
   if(objectName) obj = C.getFrame(objectName);
   if(verbose>0) LOG(1) <<"initiating grasp of object " <<(obj?obj->name:"--nil--") <<" (prefixed)";
 
+  for(uint i=self->positionRefs.N; i--;) if(self->positionRefs(i).dof==joint) self->positionRefs.remove(i);
   imps.append(make_shared<Imp_CloseGripper>(gripper, joint, fing1, fing2, obj, speed));
 }
 
@@ -497,6 +499,10 @@ bool Simulation::gripperIsDone(const char* gripperFrameName) {
   rai::Frame* gripper, *fing1, *fing2;
   rai::Joint* joint;
   getFingersForGripper(gripper, joint, fing1, fing2, C, gripperFrameName);
+  for(auto& imp: imps) {
+    auto close = std::dynamic_pointer_cast<Imp_CloseGripper>(imp);
+    if(close && close->gripper==gripper && !close->killMe) return false;
+  }
   auto* ref = self->getPositionRef(joint, false);
   if(ref){
     if(ref->stall_counter>3) return true;
@@ -505,8 +511,7 @@ bool Simulation::gripperIsDone(const char* gripperFrameName) {
     if(ref->cap<0.) return diff<1e-3;
     else return diff<ref->cap;
   }
-  LOG(0) <<"you didn't set a reference for gripper " <<gripperFrameName <<"!!";
-  return false;
+  return true;
 #endif
 }
 
