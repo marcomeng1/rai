@@ -111,7 +111,7 @@ target_link_libraries(rai_static PUBLIC rai_deps)
 find_package(PkgConfig REQUIRED)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(GLUT REQUIRED)
-pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET glfw3 glew glu jsoncpp yaml-0.1 libpng assimp ccd)
+pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET glfw3 glew glu yaml-0.1 libpng assimp ccd)
 find_library(FCL_LIB NAMES fcl REQUIRED)  # not via pkg-config: fcl.pc forces -std=c++11
 find_library(ANN_LIB NAMES ANN ann REQUIRED)
 find_library(QHULL_LIB NAMES qhullstatic qhull REQUIRED)
